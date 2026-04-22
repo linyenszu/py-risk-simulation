@@ -1,0 +1,47 @@
+murex-risk-simulation/
+│
+├── README.md
+├── requirements.txt
+├── setup.py
+├── .gitignore
+│
+├── data/
+│   ├── raw/
+│   ├── processed/
+│
+├── notebooks/
+│   ├── 01_data_simulation.ipynb
+│   ├── 02_greeks_analysis.ipynb
+│   ├── 03_var_analysis.ipynb
+│
+├── src/
+│   ├── config/
+│   │   └── settings.py
+│   │
+│   ├── data/
+│   │   ├── generate_positions.py
+│   │   ├── generate_structure.py
+│   │   ├── market_data.py
+│   │
+│   ├── pricing/
+│   │   ├── quantlib_setup.py
+│   │   ├── instruments.py
+│   │   ├── greeks.py
+│   │
+│   ├── risk/
+│   │   ├── var.py
+│   │   ├── svar.py
+│   │   ├── revaluation.py
+│   │
+│   ├── aggregation/
+│   │   └── hierarchy.py
+│   │
+│   ├── utils/
+│   │   ├── logger.py
+│   │   └── helpers.py
+│
+├── tests/
+│   ├── test_greeks.py
+│   ├── test_var.py
+│
+└── main.py

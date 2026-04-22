@@ -40,7 +40,10 @@ This project simulates a front-to-back risk pipeline similar to Murex.
 - Risk Layer
 - Aggregation Layer
 
-## Run
+
+## Installation
 ```bash
+git clone https://github.com/linyenszu/murex-risk-simulation.git
+cd murex-risk-simulation
 pip install -r requirements.txt
 python main.py
