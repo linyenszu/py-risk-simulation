@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.aggregation.hierarchy import build_reports
 from src.config.settings import Settings
 from src.data.generate_positions import generate_synthetic_positions
 from src.data.generate_structure import generate_structure
 from src.data.market_data import fetch_historical_market_data, get_latest_prices
+from src.utils.helpers import ensure_parent
 from src.utils.logger import get_logger
 
 
