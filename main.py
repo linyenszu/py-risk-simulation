@@ -1,20 +1,46 @@
-from src.data.generate_positions import generate_positions
-from src.data.market_data import fetch_market_data
-from src.risk.var import historical_var
-import numpy as np
+from __future__ import annotations
 
-def main():
-    positions = generate_positions()
-    market_data = fetch_market_data("2020-01-01")
+import pandas as pd
 
-    returns = np.log(market_data / market_data.shift(1)).dropna()
+from src.aggregation.hierarchy import build_reports
+from src.config.settings import Settings
+from src.data.generate_positions import generate_synthetic_positions
+from src.data.generate_structure import generate_structure
+from src.data.market_data import fetch_historical_market_data, get_latest_prices
+from src.utils.logger import get_logger
 
-    portfolio_returns = returns.sum(axis=1)
 
-    var_99 = historical_var(portfolio_returns)
+logger = get_logger(__name__)
 
-    print("=== Portfolio VaR (99%) ===")
-    print(var_99)
 
-if __name__ == "__main__":
+def main() -> None:
+    settings = Settings()
+    valuation_date = settings.valuation_date
+
+    logger.info('Generating synthetic positions and structure data')
+    positions_df = generate_synthetic_positions(valuation_date)
+    structure_df = generate_structure()
+
+    logger.info('Fetching historical market data')
+    market_data_df = fetch_historical_market_data(
+        settings.market_tickers,
+        settings.historical_start_date,
+        settings.historical_end_date,
+    )
+
+    logger.info('Saving raw inputs')
+    ensure_parent(settings.positions_filename)
+    positions_df.to_csv(settings.positions_filename, index=False)
+    structure_df.to_csv(settings.structure_filename, index=False)
+    market_data_df.to_csv(settings.market_data_filename)
+
+    merged = positions_df.merge(structure_df, on='Portfolio', how='left')
+    latest_prices_df = get_latest_prices(market_data_df, settings.valuation_date_str)
+    merged = merged.merge(latest_prices_df, on='Ticker', how='left')
+    merged['MarketValue_Initial'] = merged['Quantity'] * merged['CurrentPrice']
+    merged.loc[merged['InstrumentType'] != 'Stock', 'MarketValue_Initial'] = pd.NA
+
+
+
+if __name__ == '__main__':
     main()
