@@ -6,6 +6,7 @@ from src.config.settings import Settings
 from src.data.generate_positions import generate_synthetic_positions
 from src.data.generate_structure import generate_structure
 from src.data.market_data import fetch_historical_market_data, get_latest_prices
+from src.pricing.greeks import calculate_position_greeks
 from src.utils.helpers import ensure_parent
 from src.utils.logger import get_logger
 
@@ -40,6 +41,9 @@ def main() -> None:
     merged['MarketValue_Initial'] = merged['Quantity'] * merged['CurrentPrice']
     merged.loc[merged['InstrumentType'] != 'Stock', 'MarketValue_Initial'] = pd.NA
 
+    logger.info('Calculating instrument-level Greeks and NPV')
+    position_greeks = calculate_position_greeks(merged, valuation_date, settings)
+    position_greeks.to_csv(ensure_parent(settings.greeks_output_filename), index=False)
 
 
 if __name__ == '__main__':
