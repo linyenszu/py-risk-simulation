@@ -1,52 +1,41 @@
 from __future__ import annotations
 
 from datetime import timedelta
-
+import numpy as np
 import pandas as pd
 
 
-DEFAULT_FALLBACK_PRICES = pd.DataFrame(
-    {
-        'AAPL': [200.0, 202.0, 204.0, 203.19],
-        'GOOG': [150.0, 151.0, 153.0, 152.63],
-        'EURUSD=X': [1.08, 1.09, 1.10, 1.0989],
-        'GBPUSD=X': [1.28, 1.29, 1.30, 1.2990],
-    },
-    index=pd.to_datetime(['2025-04-01', '2025-04-02', '2025-04-03', '2025-04-04']),
-)
-DEFAULT_FALLBACK_PRICES.index.name = 'Date'
+def simulate_market_data(tickers: tuple[str, ...], valuation_date: str, years: int = 5, seed: int = 42) -> pd.DataFrame:
+    rng = np.random.default_rng(seed)
+    end = pd.Timestamp(valuation_date)
+    dates = pd.bdate_range(end=end, periods=years * 252)
+    start_prices = {"AAPL": 170.0, "GOOG": 140.0, "EURUSD=X": 1.08, "GBPUSD=X": 1.25}
+    vols = {"AAPL": 0.022, "GOOG": 0.024, "EURUSD=X": 0.0045, "GBPUSD=X": 0.0055}
+    drifts = {"AAPL": 0.0004, "GOOG": 0.00035, "EURUSD=X": 0.00002, "GBPUSD=X": 0.00001}
+    data: dict[str, np.ndarray] = {}
+    for ticker in tickers:
+        returns = rng.normal(drifts.get(ticker, 0.0001), vols.get(ticker, 0.01), len(dates))
+        data[ticker] = start_prices.get(ticker, 100.0) * np.exp(np.cumsum(returns))
+    return pd.DataFrame(data, index=dates).round(6)
 
 
-def fetch_historical_market_data(tickers: list[str], start, end) -> pd.DataFrame:
-    try:
-        import yfinance as yf
-
-        raw = yf.download(
-            tickers,
-            start=pd.to_datetime(start),
-            end=pd.to_datetime(end) + timedelta(days=1),
-            progress=False,
-            auto_adjust=False,
-        )
-        market_data = raw['Close'].copy() if isinstance(raw.columns, pd.MultiIndex) else raw[['Close']].rename(columns={'Close': tickers[0]})
-        market_data = market_data.ffill().bfill()
-        if market_data.empty:
-            raise ValueError('empty market data returned by yfinance')
-        market_data.index.name = 'Date'
-        return market_data
-    except Exception:
-        fallback = DEFAULT_FALLBACK_PRICES.copy()
-        missing = [ticker for ticker in tickers if ticker not in fallback.columns]
-        for ticker in missing:
-            fallback[ticker] = fallback.iloc[:, 0]
-        return fallback[tickers]
+def load_market_data(tickers: tuple[str, ...], valuation_date: str, seed: int = 42, use_yfinance: bool = False) -> pd.DataFrame:
+    if use_yfinance:
+        try:
+            import yfinance as yf
+            end = pd.Timestamp(valuation_date)
+            start = end - timedelta(days=5 * 365)
+            raw = yf.download(list(tickers), start=start, end=end + timedelta(days=1), progress=False, auto_adjust=False)
+            close = raw["Close"].ffill().bfill()
+            if not close.empty:
+                return close.loc[:valuation_date]
+        except Exception:
+            pass
+    return simulate_market_data(tickers, valuation_date, seed=seed)
 
 
-def get_latest_prices(market_data: pd.DataFrame, valuation_date_str: str) -> pd.DataFrame:
-    if valuation_date_str in market_data.index.astype(str):
-        latest_prices = market_data.loc[valuation_date_str]
-    else:
-        latest_prices = market_data.iloc[-1]
-    latest_prices_df = latest_prices.to_frame(name='CurrentPrice').reset_index()
-    latest_prices_df.rename(columns={'index': 'Ticker'}, inplace=True)
-    return latest_prices_df
+def enrich_positions_with_market(positions: pd.DataFrame, structure: pd.DataFrame, market: pd.DataFrame, valuation_date: str) -> pd.DataFrame:
+    latest = market.loc[:valuation_date].iloc[-1].rename("CurrentPrice").reset_index().rename(columns={"index": "Ticker"})
+    out = positions.merge(structure, on="Portfolio", how="left").merge(latest, on="Ticker", how="left")
+    out["MarketValue_Initial"] = np.where(out["InstrumentType"].eq("Stock"), out["Quantity"] * out["CurrentPrice"], np.nan)
+    return out

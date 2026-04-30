@@ -1,76 +1,106 @@
 from __future__ import annotations
 
+import argparse
+from pathlib import Path
 import pandas as pd
 
-from src.aggregation.hierarchy import build_reports
-from src.config.settings import Settings
+from src.aggregation.hierarchy import hierarchy_report
+from src.config.settings import RiskSettings
 from src.data.generate_positions import generate_synthetic_positions
 from src.data.generate_structure import generate_structure
-from src.data.market_data import fetch_historical_market_data, get_latest_prices
-from src.pricing.greeks import calculate_position_greeks
-from src.risk.svar import calculate_stressed_var
-from src.risk.var import calculate_historical_var
-from src.utils.helpers import ensure_parent
+from src.data.market_data import enrich_positions_with_market, load_market_data
+from src.pricing.greeks import calculate_instrument_risk
+from src.pricing.instruments import MarketContext
+from src.risk.var import calculate_var
+from src.utils.helpers import ensure_dir
 from src.utils.logger import get_logger
 
 
-logger = get_logger(__name__)
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run Murex-like risk simulation pipeline")
+    parser.add_argument("--valuation-date", default="2025-04-04")
+    parser.add_argument("--confidence", type=float, default=0.99)
+    parser.add_argument("--lookback-days", type=int, default=252)
+    parser.add_argument("--use-yfinance", action="store_true")
+    return parser.parse_args()
 
 
-def main() -> None:
-    settings = Settings()
-    valuation_date = settings.valuation_date
+def run(settings: RiskSettings) -> dict[str, pd.DataFrame | float]:
+    settings.validate()
+    log = get_logger()
+    output_dir = ensure_dir(settings.processed_data_dir)
 
-    logger.info('Generating synthetic positions and structure data')
-    positions_df = generate_synthetic_positions(valuation_date)
-    structure_df = generate_structure()
+    log.info("Generating positions and hierarchy")
+    positions = generate_synthetic_positions(settings.valuation_date)
+    structure = generate_structure()
 
-    logger.info('Fetching historical market data')
-    market_data_df = fetch_historical_market_data(
-        settings.market_tickers,
-        settings.historical_start_date,
-        settings.historical_end_date,
+    log.info("Loading market data")
+    market = load_market_data(settings.tickers, settings.valuation_date, seed=settings.random_seed)
+    enriched = enrich_positions_with_market(positions, structure, market, settings.valuation_date)
+
+    ctx = MarketContext(
+        valuation_date=pd.Timestamp(settings.valuation_date),
+        risk_free_rate=settings.risk_free_rate,
+        dividend_yield=settings.dividend_yield,
+        vols=settings.vols(),
+        fx_foreign_rates={"EURUSD=X": 0.015, "GBPUSD=X": 0.018},
     )
 
-    logger.info('Saving raw inputs')
-    ensure_parent(settings.positions_filename)
-    positions_df.to_csv(settings.positions_filename, index=False)
-    structure_df.to_csv(settings.structure_filename, index=False)
-    market_data_df.to_csv(settings.market_data_filename)
+    log.info("Pricing instruments and calculating Greeks")
+    instrument_risk = calculate_instrument_risk(enriched, ctx)
 
-    merged = positions_df.merge(structure_df, on='Portfolio', how='left')
-    latest_prices_df = get_latest_prices(market_data_df, settings.valuation_date_str)
-    merged = merged.merge(latest_prices_df, on='Ticker', how='left')
-    merged['MarketValue_Initial'] = merged['Quantity'] * merged['CurrentPrice']
-    merged.loc[merged['InstrumentType'] != 'Stock', 'MarketValue_Initial'] = pd.NA
+    log.info("Calculating portfolio Historical VaR")
+    portfolio_var, pnl = calculate_var(
+        instrument_risk,
+        market,
+        ctx,
+        confidence_level=settings.confidence_level,
+        lookback_days=settings.lookback_days,
+    )
 
-    logger.info('Calculating instrument-level Greeks and NPV')
-    position_greeks = calculate_position_greeks(merged, valuation_date, settings)
-    position_greeks.to_csv(ensure_parent(settings.greeks_output_filename), index=False)
+    log.info("Building hierarchy reports")
+    desk_report = hierarchy_report(
+        instrument_risk,
+        market,
+        ctx,
+        settings.confidence_level,
+        settings.lookback_days,
+        settings.stress_window_days,
+        group_col="TradingDesk",
+    )
+    unit_report = hierarchy_report(
+        instrument_risk,
+        market,
+        ctx,
+        settings.confidence_level,
+        settings.lookback_days,
+        settings.stress_window_days,
+        group_col="Unit",
+    )
 
-    logger.info('Calculating portfolio VaR and stressed VaR')
-    var_result = calculate_historical_var(position_greeks, market_data_df, valuation_date, settings)
-    svar_result = calculate_stressed_var(position_greeks, var_result['factor_changes'], valuation_date, settings)
-    portfolio_var = pd.DataFrame([
-        {
-            'CurrentNPV': var_result['current_npv'],
-            'ScenarioCount': var_result['scenario_count'],
-            'VaR_99': var_result['var_99'],
-            'sVaR_99': svar_result['svar_99'],
-        }
-    ])
-    portfolio_var.to_csv(ensure_parent(settings.portfolio_var_filename), index=False)
+    enriched.to_csv(output_dir / "positions_enriched.csv", index=False)
+    instrument_risk.to_csv(output_dir / "instrument_risk.csv", index=False)
+    pnl.to_csv(output_dir / "portfolio_pnl.csv")
+    desk_report.to_csv(output_dir / "risk_report_by_desk.csv", index=False)
+    unit_report.to_csv(output_dir / "risk_report_by_unit.csv", index=False)
 
-    logger.info('Building hierarchy reports')
-    report_by_desk, report_by_unit = build_reports(position_greeks, market_data_df, valuation_date, settings)
-    report_by_desk.to_csv(ensure_parent(settings.report_by_desk_filename), index=False)
-    report_by_unit.to_csv(ensure_parent(settings.report_by_unit_filename), index=False)
-
-    logger.info('Done')
-    logger.info('Portfolio summary\n%s', portfolio_var.to_string(index=False))
-    logger.info('Desk report\n%s', report_by_desk.to_string(index=False))
-    logger.info('Unit report\n%s', report_by_unit.to_string(index=False))
+    log.info("Portfolio VaR %.2f", portfolio_var)
+    log.info("Wrote outputs to %s", Path(output_dir).resolve())
+    return {
+        "portfolio_var": portfolio_var,
+        "instrument_risk": instrument_risk,
+        "portfolio_pnl": pnl,
+        "desk_report": desk_report,
+        "unit_report": unit_report,
+    }
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    args = parse_args()
+    run(
+        RiskSettings(
+            valuation_date=args.valuation_date,
+            confidence_level=args.confidence,
+            lookback_days=args.lookback_days,
+        )
+    )
