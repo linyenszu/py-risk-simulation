@@ -32,3 +32,23 @@ class RiskSettings:
             raise ValueError("confidence_level must be between 0.90 and 1.0")
         if self.lookback_days < 30:
             raise ValueError("lookback_days must be at least 30")
+
+
+@dataclass(frozen=True)
+class AppConfig(RiskSettings):
+    """Backward-compatible application config used by scripts/notebooks.
+
+    The project originally referenced AppConfig with market_tickers and
+    historical_start_date attributes. RiskSettings is now the canonical config,
+    but this alias keeps older scripts and notebooks working.
+    """
+
+    @property
+    def market_tickers(self) -> tuple[str, ...]:
+        return self.tickers
+
+    @property
+    def historical_start_date(self) -> str:
+        import pandas as pd
+
+        return (pd.Timestamp(self.valuation_date) - pd.Timedelta(days=5 * 365)).strftime("%Y-%m-%d")

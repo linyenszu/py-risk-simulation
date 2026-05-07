@@ -1,0 +1,77 @@
+murex-risk-simulation/
+│
+├── README.md
+├── LICENSE
+├── pyproject.toml
+├── requirements.txt
+├── setup.py
+├── Makefile
+├── Dockerfile
+├── .gitignore
+├── .env.example
+│
+├── data/
+│   ├── raw/                   # Raw downloaded / simulated data
+│   ├── processed/             # Cleaned & transformed datasets
+│   └── outputs/               # VaR results, reports, exports
+│
+├── notebooks/
+│   ├── 01_data_simulation.ipynb
+│   ├── 02_greeks_analysis.ipynb
+│   ├── 03_var_analysis.ipynb
+│
+├── src/
+│   ├── **init**.py
+│   │
+│   ├── config/
+│   │   ├── **init**.py
+│   │   └── settings.py        # Global config (paths, dates, params)
+│   │
+│   ├── data/
+│   │   ├── **init**.py
+│   │   ├── generate_positions.py
+│   │   ├── generate_structure.py
+│   │   ├── market_data.py
+│   │   └── loaders.py         # Load/merge datasets
+│   │
+│   ├── pricing/
+│   │   ├── **init**.py
+│   │   ├── quantlib_setup.py
+│   │   ├── instruments.py     # Pricing wrappers
+│   │   ├── greeks.py          # Delta, Gamma, Vega, etc.
+│   │   └── fallback_bs.py     # Black-Scholes fallback (no QuantLib)
+│   │
+│   ├── risk/
+│   │   ├── **init**.py
+│   │   ├── revaluation.py     # Scenario revaluation engine
+│   │   ├── var.py             # Historical VaR
+│   │   └── svar.py            # Stressed VaR
+│   │
+│   ├── aggregation/
+│   │   ├── **init**.py
+│   │   └── hierarchy.py       # Portfolio → Desk → Unit rollups
+│   │
+│   ├── utils/
+│   │   ├── **init**.py
+│   │   ├── logger.py
+│   │   ├── helpers.py
+│   │   └── decorators.py
+│
+├── tests/
+│   ├── **init**.py
+│   ├── test_greeks.py
+│   ├── test_var.py
+│   ├── test_revaluation.py
+│
+├── scripts/
+│   ├── run_pipeline.sh
+│   └── bootstrap_data.py
+│
+├── reports/
+│   ├── figures/
+│   └── summaries/
+│
+├── logs/
+│   └── app.log
+│
+└── main.py                    # Entry point (CLI pipeline runner)

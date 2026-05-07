@@ -39,3 +39,19 @@ def enrich_positions_with_market(positions: pd.DataFrame, structure: pd.DataFram
     out = positions.merge(structure, on="Portfolio", how="left").merge(latest, on="Ticker", how="left")
     out["MarketValue_Initial"] = np.where(out["InstrumentType"].eq("Stock"), out["Quantity"] * out["CurrentPrice"], np.nan)
     return out
+
+
+def get_market_data(
+    tickers: tuple[str, ...],
+    historical_start_date: str | None = None,
+    valuation_date: str = "2025-04-04",
+    seed: int = 42,
+    use_yfinance: bool = False,
+) -> pd.DataFrame:
+    """Backward-compatible wrapper for notebooks/scripts.
+
+    ``historical_start_date`` is accepted for the original API. The synthetic
+    data path derives a five-year business-day history ending on valuation_date;
+    the yfinance path uses load_market_data's standard five-year window.
+    """
+    return load_market_data(tickers, valuation_date, seed=seed, use_yfinance=use_yfinance)

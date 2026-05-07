@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "py-risk-simulation"
+version = "0.2.0"
+description = "Production-style Murex-like risk pipeline for Greeks, Historical VaR, sVaR and hierarchy aggregation"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.26",
+  "pandas>=2.2",
+  "matplotlib>=3.8",
+  "pydantic>=2.6",
+  "yfinance>=0.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.4", "mypy>=1.8"]
+quantlib = ["QuantLib>=1.31"]
+
+[tool.setuptools]
+packages = ["src", "src.config", "src.data", "src.pricing", "src.risk", "src.aggregation", "src.utils"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

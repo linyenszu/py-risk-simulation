@@ -1,7 +1,6 @@
-pandas
-numpy
-yfinance
-matplotlib
-seaborn
-QuantLib
-scipy
+numpy>=1.26
+pandas>=2.2
+matplotlib>=3.8
+pydantic>=2.6
+yfinance>=0.2
+pytest>=8.0

@@ -34,3 +34,26 @@ def portfolio_pnl_distribution(positions: pd.DataFrame, market_data: pd.DataFram
             **{f"PositionPnL_{pid}": pnl for pid, pnl in zip(revalued["PositionID"], revalued["PnL"])}
         })
     return pd.DataFrame(rows).set_index("ScenarioDate")
+
+
+def revalue_portfolio_under_scenario(
+    positions: pd.DataFrame,
+    log_return_scenario: pd.Series,
+    base_prices: pd.Series,
+    ctx: MarketContext | None = None,
+) -> float:
+    """Convenience function returning total scenario NPV for a single scenario.
+
+    If no market context is supplied, this supports stock-only smoke tests.
+    """
+    shocked = scenario_prices(base_prices, log_return_scenario)
+    total = 0.0
+    for _, row in positions.iterrows():
+        spot = float(shocked[row["Ticker"]])
+        if ctx is None:
+            if row["InstrumentType"] != "Stock":
+                raise ValueError("ctx is required for non-stock instruments")
+            total += float(row["Quantity"]) * spot
+        else:
+            total += price_position(row, ctx, override_spot=spot)["NPV"]
+    return float(total)
