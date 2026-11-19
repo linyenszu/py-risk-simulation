@@ -13,6 +13,20 @@ from src.pricing.instruments import (
     price_zero_coupon_bond,
 )
 
+RATE_SENSITIVE_TYPES = frozenset({"Zero Coupon Bond", "Fixed Rate Bond", "Interest Rate Swap"})
+
+
+def rate_shift_for_scenario(row: pd.Series, override_spot: float | None) -> float:
+    """Absolute parallel rate shift implied by a scenario for rate instruments.
+
+    For rate instruments the "price" series is a rate level (e.g. US10Y = 0.04), so a
+    scenario's simulated level minus the base level is the curve shock.
+    """
+    if override_spot is None or row["InstrumentType"] not in RATE_SENSITIVE_TYPES:
+        return 0.0
+    return float(override_spot) - float(row["CurrentPrice"])
+
+
 GREEK_COLUMNS = ["NPV", "Delta", "Gamma", "Vega", "Theta", "Rho"]
 
 
@@ -34,6 +48,7 @@ def price_position(row: pd.Series, ctx: MarketContext, override_spot: float | No
     spot = float(row["CurrentPrice"] if override_spot is None else override_spot)
     quantity = float(row["Quantity"])
     instrument_type = row["InstrumentType"]
+    ctx = ctx.with_rate_shift(rate_shift_for_scenario(row, override_spot))
 
     if instrument_type == "Stock":
         return price_stock(quantity, spot)

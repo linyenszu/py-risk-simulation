@@ -10,6 +10,9 @@ def select_stress_scenarios(market_data: pd.DataFrame, stress_window_days: int, 
         anchor_ticker = returns.columns[0]
     worst_date = returns[anchor_ticker].idxmin()
     loc = returns.index.get_loc(worst_date)
-    start = max(0, loc - stress_window_days // 2)
-    end = min(len(returns), start + stress_window_days)
-    return returns.iloc[start:end]
+    # Keep the window the requested length: centre on the worst day, then slide
+    # it inside the sample if the worst day is near either end.
+    n = len(returns)
+    window = min(stress_window_days, n)
+    start = max(0, min(loc - window // 2, n - window))
+    return returns.iloc[start:start + window]

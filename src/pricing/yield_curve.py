@@ -122,6 +122,59 @@ def _interpolated_discount_factor(time_years: float, bootstrapped: dict[float, f
     return float(exp(np.interp(time_years, pillars, log_dfs)))
 
 
+def _bond_pv_with_candidate(
+    times: list[float],
+    coupon: float,
+    face_value: float,
+    maturity: float,
+    candidate_df: float,
+    bootstrapped: dict[float, float],
+) -> float:
+    """PV of a bond when the new maturity pillar has discount factor ``candidate_df``.
+
+    Intermediate coupons are interpolated on the curve *including* the candidate
+    pillar, so the solved curve reprices the input bond exactly.
+    """
+
+    trial = {**bootstrapped, maturity: candidate_df}
+    pv = 0.0
+    for cashflow_time in times[:-1]:
+        pv += coupon * _interpolated_discount_factor(cashflow_time, trial)
+    return pv + (face_value + coupon) * candidate_df
+
+
+def _solve_pillar_discount_factor(
+    instrument_id: str,
+    times: list[float],
+    coupon: float,
+    face_value: float,
+    maturity: float,
+    market_price: float,
+    bootstrapped: dict[float, float],
+) -> float:
+    """Bisection solve for the pillar DF so the bond reprices to its market price."""
+
+    def gap(df: float) -> float:
+        return _bond_pv_with_candidate(times, coupon, face_value, maturity, df, bootstrapped) - market_price
+
+    lo, hi = 1e-8, 1.5
+    g_lo, g_hi = gap(lo), gap(hi)
+    if g_lo * g_hi > 0:
+        raise ValueError(
+            f"Invalid bootstrapped discount factor for {instrument_id}; check price/coupon inputs"
+        )
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        g_mid = gap(mid)
+        if g_mid == 0.0 or (hi - lo) < 1e-15:
+            return mid
+        if g_lo * g_mid < 0:
+            hi = mid
+        else:
+            lo, g_lo = mid, g_mid
+    return 0.5 * (lo + hi)
+
+
 def bootstrap_zero_coupon_curve(bonds: pd.DataFrame) -> pd.DataFrame:
     """Bootstrap a zero-coupon yield curve from bond market prices.
 
@@ -150,18 +203,11 @@ def bootstrap_zero_coupon_curve(bonds: pd.DataFrame) -> pd.DataFrame:
 
         coupon = face_value * coupon_rate / frequency
         times = _cashflow_times(maturity, frequency)
+        times[-1] = maturity
 
-        pv_known = 0.0
-        for cashflow_time in times[:-1]:
-            pv_known += coupon * _interpolated_discount_factor(cashflow_time, bootstrapped)
-
-        final_cashflow = face_value + coupon
-        discount_factor = (market_price - pv_known) / final_cashflow
-        if not 0.0 < discount_factor <= 1.5:
-            raise ValueError(
-                f"Invalid bootstrapped discount factor {discount_factor:.8f} "
-                f"for {instrument_id}; check price/coupon inputs"
-            )
+        discount_factor = _solve_pillar_discount_factor(
+            instrument_id, times, coupon, face_value, maturity, market_price, bootstrapped
+        )
 
         zero_rate = -log(discount_factor) / maturity
         bootstrapped[maturity] = discount_factor
@@ -216,6 +262,23 @@ class ZeroCouponYieldCurve:
 
     def to_frame(self) -> pd.DataFrame:
         return self.curve.copy()
+
+
+class ShiftedZeroCurve:
+    """A base curve with a parallel continuously-compounded zero-rate shift."""
+
+    def __init__(self, base, shift: float):
+        self.base = base
+        self.shift = float(shift)
+
+    def discount_factor(self, maturity_years: float) -> float:
+        return self.base.discount_factor(maturity_years) * exp(-self.shift * float(maturity_years))
+
+    def zero_rate(self, maturity_years: float) -> float:
+        return self.base.zero_rate(maturity_years) + self.shift
+
+    def forward_rate(self, start_years: float, end_years: float) -> float:
+        return self.base.forward_rate(start_years, end_years) + self.shift
 
 
 def price_zero_coupon_from_curve(face_value: float, maturity_years: float, curve: ZeroCouponYieldCurve) -> float:

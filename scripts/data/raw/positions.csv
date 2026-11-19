@@ -1,0 +1,17 @@
+PositionID,InstrumentType,Ticker,Quantity,Portfolio,Maturity,Strike,OptionType,ContractMultiplier,FaceValue,CouponRate,Notional,FixedRate,PayReceive,PaymentFrequency
+POS001,Stock,AAPL,1000,P1_EqUS,,,,,,,,,,
+POS002,Stock,GOOG,500,P1_EqUS,,,,,,,,,,
+POS003,FX Forward,EURUSD=X,1000000,P2_FXMaj,2025-07-03,1.08,,,,,,,,
+POS004,FX Forward,GBPUSD=X,-500000,P2_FXMaj,2025-10-01,1.25,,,,,,,,
+POS005,European Option,AAPL,50,P3_OptEq,2025-06-03,170.0,Call,,,,,,,
+POS006,European Option,GOOG,-30,P3_OptEq,2025-08-02,180.0,Put,,,,,,,
+POS007,Stock,GOOG,-200,P1_EqUS,,,,,,,,,,
+POS008,European Option,AAPL,100,P4_OptSpec,2025-07-03,175.0,Call,,,,,,,
+POS009,FX Forward,EURUSD=X,-200000,P2_FXMaj,2025-05-04,1.07,,,,,,,,
+POS010,Stock,AAPL,400,P4_OptSpec,,,,,,,,,,
+POS011,Equity Future,AAPL,10,P5_Futures,2025-07-03,205.0,,100.0,,,,,,
+POS012,Equity Future,GOOG,-5,P5_Futures,2025-10-01,155.0,,100.0,,,,,,
+POS013,Zero Coupon Bond,US10Y,250,P6_Rates,2027-04-04,,,,1000.0,,,,,
+POS014,Fixed Rate Bond,US10Y,150,P6_Rates,2030-04-03,,,,1000.0,0.045,,,,2.0
+POS015,Interest Rate Swap,SOFR,1,P7_Swaps,2028-04-03,,,,,,5000000.0,0.035,Payer,2.0
+POS016,Interest Rate Swap,SOFR,-1,P7_Swaps,2032-04-02,,,,,,3000000.0,0.032,Receiver,2.0

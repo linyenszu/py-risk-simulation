@@ -156,6 +156,22 @@ def european_option_payoff(terminal_prices: np.ndarray, strike: float, option_ty
     raise ValueError("option_type must be 'Call' or 'Put'")
 
 
+def _standard_error(discounted_payoff: np.ndarray, antithetic: bool) -> float:
+    """Standard error of the sample mean.
+
+    With antithetic sampling the draws are NOT independent: z[i] is paired with
+    z[h+i] = -z[i] (h = ceil(n/2)). The independent units are the pair averages, so
+    the SE must be computed on those; using the raw per-path std overstates it.
+    """
+    n = len(discounted_payoff)
+    if not antithetic or n < 4:
+        return float(np.std(discounted_payoff, ddof=1) / sqrt(n))
+    half = (n + 1) // 2
+    pairs = n // 2
+    pair_means = 0.5 * (discounted_payoff[:pairs] + discounted_payoff[half:half + pairs])
+    return float(np.std(pair_means, ddof=1) / sqrt(pairs))
+
+
 def price_european_option_mc(
     spot: float,
     strike: float,
@@ -184,7 +200,7 @@ def price_european_option_mc(
     payoff = european_option_payoff(terminal_prices, strike, option_type)
     discounted_payoff = exp(-rate * maturity_years) * payoff
     price = float(np.mean(discounted_payoff))
-    standard_error = float(np.std(discounted_payoff, ddof=1) / sqrt(num_paths))
+    standard_error = _standard_error(discounted_payoff, antithetic)
     ci_half_width = confidence_z * standard_error
     return MonteCarloOptionResult(
         price=price,

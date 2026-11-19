@@ -5,17 +5,30 @@ import numpy as np
 import pandas as pd
 
 
+# Valuation-date anchor levels for the synthetic history. The simulated path is
+# shifted so the LAST observation equals these values, which keeps strikes in
+# generate_positions consistent with the spot used for pricing.
+ANCHOR_PRICES: dict[str, float] = {
+    "AAPL": 170.0,
+    "GOOG": 140.0,
+    "EURUSD=X": 1.08,
+    "GBPUSD=X": 1.25,
+    "US10Y": 0.04,
+    "SOFR": 0.035,
+}
+
+
 def simulate_market_data(tickers: tuple[str, ...], valuation_date: str, years: int = 5, seed: int = 42) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
     end = pd.Timestamp(valuation_date)
     dates = pd.bdate_range(end=end, periods=years * 252)
-    start_prices = {"AAPL": 170.0, "GOOG": 140.0, "EURUSD=X": 1.08, "GBPUSD=X": 1.25, "US10Y": 0.04, "SOFR": 0.035}
     vols = {"AAPL": 0.022, "GOOG": 0.024, "EURUSD=X": 0.0045, "GBPUSD=X": 0.0055, "US10Y": 0.015, "SOFR": 0.01}
     drifts = {"AAPL": 0.0004, "GOOG": 0.00035, "EURUSD=X": 0.00002, "GBPUSD=X": 0.00001, "US10Y": 0.0, "SOFR": 0.0}
     data: dict[str, np.ndarray] = {}
     for ticker in tickers:
         returns = rng.normal(drifts.get(ticker, 0.0001), vols.get(ticker, 0.01), len(dates))
-        data[ticker] = start_prices.get(ticker, 100.0) * np.exp(np.cumsum(returns))
+        log_path = np.cumsum(returns)
+        data[ticker] = ANCHOR_PRICES.get(ticker, 100.0) * np.exp(log_path - log_path[-1])
     return pd.DataFrame(data, index=dates).round(6)
 
 

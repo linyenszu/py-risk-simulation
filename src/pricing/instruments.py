@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from math import erf, exp, log, pi, sqrt
 from typing import Any
 import pandas as pd
+
+from src.pricing.yield_curve import ShiftedZeroCurve
 
 
 def _norm_cdf(x: float) -> float:
@@ -22,6 +24,13 @@ class MarketContext:
     vols: dict[str, float]
     fx_foreign_rates: dict[str, float]
     zero_curve: Any | None = None
+
+    def with_rate_shift(self, shift: float) -> "MarketContext":
+        """Return a context with a parallel zero-rate shift (absolute, e.g. 0.0001 = 1bp)."""
+        if shift == 0.0:
+            return self
+        curve = ShiftedZeroCurve(self.zero_curve, shift) if self.zero_curve is not None else None
+        return replace(self, risk_free_rate=self.risk_free_rate + shift, zero_curve=curve)
 
     def time_to_maturity(self, maturity: pd.Timestamp) -> float:
         return max((pd.Timestamp(maturity) - self.valuation_date).days / 365.0, 0.0)
@@ -173,6 +182,11 @@ def price_interest_rate_swap(
 
     Payer means pay fixed / receive floating, so PV increases when floating/par rate rises.
     Receiver has the opposite sign.
+
+    Sign convention: ``pay_receive`` fixes the side of ONE unit; ``quantity`` is the
+    signed number of units. A short Payer (quantity < 0) is economically a Receiver,
+    so use positive quantities with the appropriate ``pay_receive`` to avoid double
+    negatives.
     """
     t = ctx.time_to_maturity(maturity)
     if t <= 0:

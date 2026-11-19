@@ -310,11 +310,12 @@ def run(
     resolved_mc_seed = settings.random_seed if mc_seed is None else mc_seed
 
     log.info("Generating positions and hierarchy")
-    positions = generate_synthetic_positions(settings.valuation_date)
     structure = generate_structure()
 
     log.info("Loading market data")
     market = load_market_data(settings.tickers, settings.valuation_date, seed=settings.random_seed)
+    latest_spots = market.loc[: settings.valuation_date].iloc[-1].to_dict()
+    positions = generate_synthetic_positions(settings.valuation_date, spots=latest_spots)
     enriched = enrich_positions_with_market(positions, structure, market, settings.valuation_date)
 
     zero_curve = load_zero_curve(bond_quotes_path) if use_yield_curve else None

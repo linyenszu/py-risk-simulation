@@ -24,7 +24,7 @@ def market(settings: RiskSettings) -> pd.DataFrame:
 @pytest.fixture()
 def positions(settings: RiskSettings, market: pd.DataFrame) -> pd.DataFrame:
     return enrich_positions_with_market(
-        generate_synthetic_positions(settings.valuation_date),
+        generate_synthetic_positions(settings.valuation_date, spots=market.loc[: settings.valuation_date].iloc[-1].to_dict()),
         generate_structure(),
         market,
         settings.valuation_date,

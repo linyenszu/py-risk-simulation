@@ -1,0 +1,8 @@
+Portfolio,TradingDesk,Unit
+P1_EqUS,Equity Desk,Trading Unit A
+P2_FXMaj,FX Desk,Trading Unit A
+P3_OptEq,Options Desk,Trading Unit B
+P4_OptSpec,Options Desk,Trading Unit B
+P5_Futures,Futures Desk,Trading Unit A
+P6_Rates,Rates Desk,Trading Unit C
+P7_Swaps,Rates Desk,Trading Unit C

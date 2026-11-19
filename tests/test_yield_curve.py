@@ -52,7 +52,7 @@ def test_curve_reprices_input_coupon_bonds_at_pillars() -> None:
             t = i / frequency
             cashflow = coupon + (float(bond["FaceValue"]) if i == periods else 0.0)
             pv += cashflow * zero_curve.discount_factor(t)
-        assert pv == pytest.approx(float(bond["MarketPrice"]), abs=0.35)
+        assert pv == pytest.approx(float(bond["MarketPrice"]), abs=1e-8)
 
 
 def test_zero_curve_interpolation_and_forward_rate_are_positive() -> None:
